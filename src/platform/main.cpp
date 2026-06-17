@@ -35,6 +35,39 @@ static float syTop(const Player& p) {
     return FLOOR_PX - p.posY.toInt() * SCALE - FIGHTER_H;
 }
 
+// ---- crisp UI text -------------------------------------------------------
+// raylib's built-in font is a tiny pixel bitmap that looks rough scaled up.
+// We load a real TrueType font once (Windows ships Segoe UI) and render with
+// bilinear filtering. Falls back to the default font if the file is missing.
+static Font g_font;
+static bool g_fontReady = false;
+
+static void loadUiFont() {
+    g_font = LoadFontEx("C:/Windows/Fonts/segoeui.ttf", 64, nullptr, 0);
+    if (g_font.texture.id != 0 && g_font.glyphCount > 0) {
+        SetTextureFilter(g_font.texture, TEXTURE_FILTER_BILINEAR);
+        g_fontReady = true;
+    } else {
+        g_font = GetFontDefault();
+        g_fontReady = false;
+    }
+}
+
+// Drop-in replacement for DrawText with the same (text,x,y,size,color) shape.
+static void DT(const char* t, int x, int y, int size, Color c) {
+    if (g_fontReady)
+        DrawTextEx(g_font, t, (Vector2){ (float)x, (float)y }, (float)size, 1.0f, c);
+    else
+        DrawText(t, x, y, size, c);
+}
+
+// Width of a string in the active font, so we can center text precisely.
+static float textW(const char* t, int size) {
+    if (g_fontReady)
+        return MeasureTextEx(g_font, t, (float)size, 1.0f).x;
+    return (float)MeasureText(t, size);
+}
+
 static Input gatherInput(int kLeft, int kRight, int kJump, int kAtk, int kParry) {
     Input in = 0;
     if (IsKeyDown(kLeft))  in |= IN_LEFT;
@@ -107,6 +140,7 @@ static void drawStageAndFighters(const GameState& s) {
 static int runHotSeat() {
     InitWindow(SCREEN_W, SCREEN_H, "PARITY — hot-seat");
     SetTargetFPS(60);
+    loadUiFont();
     GameState s; initState(s);
     bool paused = false;
 
@@ -122,15 +156,15 @@ static int runHotSeat() {
         ClearBackground((Color){ 24, 26, 34, 255 });
         drawStageAndFighters(s);
         uint64_t h = hashState(s);
-        DrawText(TextFormat("frame %u", s.frame), 20, 50, 18, RAYWHITE);
-        DrawText(TextFormat("hash %08x%08x", (unsigned)(h >> 32), (unsigned)(h & 0xFFFFFFFFu)),
+        DT(TextFormat("frame %u", s.frame), 20, 50, 18, RAYWHITE);
+        DT(TextFormat("hash %08x%08x", (unsigned)(h >> 32), (unsigned)(h & 0xFFFFFFFFu)),
                  20, 72, 16, Fade(RAYWHITE, 0.7f));
-        DrawText("P1: A/D W F G    P2: <- -> Up . /", 20, SCREEN_H - 22, 14, Fade(RAYWHITE, 0.55f));
-        DrawText("[R] reset  [P] pause", SCREEN_W / 2 - 90, 52, 16, Fade(RAYWHITE, 0.6f));
-        if (paused) DrawText("PAUSED", SCREEN_W / 2 - 40, SCREEN_H / 2, 30, YELLOW);
+        DT("P1: A/D W F G    P2: <- -> Up . /", 20, SCREEN_H - 22, 14, Fade(RAYWHITE, 0.55f));
+        DT("[R] reset  [P] pause", SCREEN_W / 2 - 90, 52, 16, Fade(RAYWHITE, 0.6f));
+        if (paused) DT("PAUSED", SCREEN_W / 2 - 40, SCREEN_H / 2, 30, YELLOW);
         if (over) {
             const char* who = s.players[0].health <= 0 ? "P2 WINS" : "P1 WINS";
-            DrawText(who, SCREEN_W / 2 - 70, SCREEN_H / 2 - 20, 40, GOLD);
+            DT(who, SCREEN_W / 2 - 70, SCREEN_H / 2 - 20, 40, GOLD);
         }
         EndDrawing();
     }
@@ -142,32 +176,33 @@ static int runHotSeat() {
 static void drawNetHud(const NetStats& st, int localPlayer) {
     int x = 20, y = 50;
     Color ok = (Color){ 120, 230, 140, 255 };
-    DrawText(TextFormat("NET  you are P%d", localPlayer), x, y, 18,
+    DT(TextFormat("NET  you are P%d", localPlayer), x, y, 18,
              (Color){ 200, 200, 255, 255 });
-    DrawText(st.connected ? "CONNECTED" : "waiting for peer...", x, y + 22, 16,
+    DT(st.connected ? "CONNECTED" : "waiting for peer...", x, y + 22, 16,
              st.connected ? ok : (Color){ 230, 200, 120, 255 });
 
     int yy = y + 50;
-    DrawText(TextFormat("rtt        %d ms", st.rttMs), x, yy, 16, RAYWHITE);          yy += 20;
-    DrawText(TextFormat("local f    %u", st.localFrame), x, yy, 16, RAYWHITE);        yy += 20;
-    DrawText(TextFormat("remote f   %u", st.remoteFrame), x, yy, 16, RAYWHITE);       yy += 20;
-    DrawText(TextFormat("confirmed  %u", st.confirmed), x, yy, 16, RAYWHITE);         yy += 20;
-    DrawText(TextFormat("rollback   %u (max %u)", st.lastRollback, st.maxRollback),
+    DT(TextFormat("rtt        %d ms", st.rttMs), x, yy, 16, RAYWHITE);          yy += 20;
+    DT(TextFormat("local f    %u", st.localFrame), x, yy, 16, RAYWHITE);        yy += 20;
+    DT(TextFormat("remote f   %u", st.remoteFrame), x, yy, 16, RAYWHITE);       yy += 20;
+    DT(TextFormat("confirmed  %u", st.confirmed), x, yy, 16, RAYWHITE);         yy += 20;
+    DT(TextFormat("rollback   %u (max %u)", st.lastRollback, st.maxRollback),
              x, yy, 16, st.lastRollback ? (Color){ 255, 210, 120, 255 } : RAYWHITE);  yy += 20;
-    DrawText(TextFormat("mispredict %u", st.mispredicts), x, yy, 16, RAYWHITE);       yy += 20;
-    DrawText(TextFormat("stalls     %u", st.stalls), x, yy, 16, RAYWHITE);            yy += 20;
-    DrawText(TextFormat("pkt s/r    %u / %u", st.packetsSent, st.packetsRecv),
+    DT(TextFormat("mispredict %u", st.mispredicts), x, yy, 16, RAYWHITE);       yy += 20;
+    DT(TextFormat("stalls     %u", st.stalls), x, yy, 16, RAYWHITE);            yy += 20;
+    DT(TextFormat("pkt s/r    %u / %u", st.packetsSent, st.packetsRecv),
              x, yy, 16, Fade(RAYWHITE, 0.7f));                                        yy += 24;
 
     if (st.desync)
-        DrawText(TextFormat("!! DESYNC at frame %u", st.desyncFrame), x, yy, 18, RED);
+        DT(TextFormat("!! DESYNC at frame %u", st.desyncFrame), x, yy, 18, RED);
     else if (st.connected)
-        DrawText("sync OK", x, yy, 16, ok);
+        DT("sync OK", x, yy, 16, ok);
 }
 
 static int runNet(int localPlayer, uint16_t localPort, const char* ip, uint16_t rport) {
     InitWindow(SCREEN_W, SCREEN_H, TextFormat("PARITY — netplay (P%d)", localPlayer));
     SetTargetFPS(60);
+    loadUiFont();
 
     NetGame ng;
     if (!ng.start(localPlayer, localPort, ip, rport)) {
@@ -175,7 +210,7 @@ static int runNet(int localPlayer, uint16_t localPort, const char* ip, uint16_t 
         for (int i = 0; i < 180 && !WindowShouldClose(); ++i) {
             BeginDrawing();
             ClearBackground((Color){ 30, 16, 16, 255 });
-            DrawText("Failed to open UDP socket (port in use?)", 40, 200, 22, RED);
+            DT("Failed to open UDP socket (port in use?)", 40, 200, 22, RED);
             EndDrawing();
         }
         CloseWindow();
@@ -191,13 +226,13 @@ static int runNet(int localPlayer, uint16_t localPort, const char* ip, uint16_t 
         ClearBackground((Color){ 24, 26, 34, 255 });
         drawStageAndFighters(ng.state());
         drawNetHud(ng.stats(), localPlayer);
-        DrawText("move A/D  jump W  attack F  parry G", 20, SCREEN_H - 22, 14,
+        DT("move A/D  jump W  attack F  parry G", 20, SCREEN_H - 22, 14,
                  Fade(RAYWHITE, 0.55f));
 
         const GameState& s = ng.state();
         if (s.players[0].health <= 0 || s.players[1].health <= 0) {
             int win = s.players[0].health <= 0 ? 1 : 0;
-            DrawText(win == localPlayer ? "YOU WIN" : "YOU LOSE",
+            DT(win == localPlayer ? "YOU WIN" : "YOU LOSE",
                      SCREEN_W / 2 - 90, SCREEN_H / 2 - 20, 40, GOLD);
         }
         EndDrawing();
