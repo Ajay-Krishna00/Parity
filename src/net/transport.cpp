@@ -65,6 +65,11 @@ int UdpPeer::recv(void* buf, int maxLen) {
     if (n == SOCKET_ERROR) {
         return (WSAGetLastError() == WSAEWOULDBLOCK) ? 0 : -1;
     }
+    // Host mode: lock onto the first peer that talks to us.
+    if (autoAdopt && !haveRemote) {
+        memcpy(remoteAddr, &from, sizeof(sockaddr_in));
+        haveRemote = true;
+    }
     return n;
 }
 

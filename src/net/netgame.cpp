@@ -36,7 +36,12 @@ bool NetGame::start(int local, uint16_t localPort,
     startMs = nowMs();
 
     if (!peer.open(localPort)) return false;
-    peer.setRemote(remoteIp, remotePort);
+    if (remoteIp.empty()) {
+        // Host: client address unknown until it connects; adopt the first sender.
+        peer.enableAutoAdopt();
+    } else {
+        peer.setRemote(remoteIp, remotePort);
+    }
     return true;
 }
 

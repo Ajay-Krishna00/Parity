@@ -14,6 +14,7 @@ RAYLIB="${RAYLIB:-/c/raylib-6.0_win64_mingw-w64}"
     src/net/rollback.cpp \
     src/net/transport.cpp \
     src/net/netgame.cpp \
+    src/net/discovery.cpp \
     src/platform/main.cpp \
     -I"$RAYLIB/include" \
     -L"$RAYLIB/lib" \
